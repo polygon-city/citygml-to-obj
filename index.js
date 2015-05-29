@@ -4,7 +4,6 @@ var path = require("path");
 var sax = require("sax");
 var saxpath = require("saxpath");
 var DOMParser = require("xmldom").DOMParser;
-var pd = require("pretty-data").pd;
 var strict = true;
 var UUID = require("uuid");
 
