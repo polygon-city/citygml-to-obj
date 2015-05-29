@@ -1,0 +1,29 @@
+{
+  "name": "citygml-to-obj",
+  "version": "0.1.0",
+  "description": "Takes a CityGML file and creates an OBJ file for each building",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/polygon-city/citygml-to-obj"
+  },
+  "keywords": [
+    "citygml",
+    "3d",
+    "obj",
+    "convert",
+    "mapping",
+    "gis"
+  ],
+  "author": "Robin Hawkes <rob@vizicities.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/polygon-city/citygml-to-obj/issues"
+  },
+  "homepage": "https://github.com/polygon-city/citygml-to-obj",
+  "dependencies": {
+  }
+}
