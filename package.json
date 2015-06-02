@@ -1,6 +1,6 @@
 {
   "name": "citygml-to-obj",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Takes a CityGML file and creates an OBJ file for each building",
   "main": "index.js",
   "scripts": {
@@ -25,10 +25,12 @@
   },
   "homepage": "https://github.com/polygon-city/citygml-to-obj",
   "dependencies": {
+    "async": "^1.1.0",
     "citygml-boundaries": "^0.1.1",
     "citygml-points": "^0.1.1",
     "citygml-polygons": "^0.1.1",
     "citygml-srs": "^0.1.1",
+    "citygml-validate-shell": "^0.1.16",
     "fs-extra": "^0.18.4",
     "lodash": "^3.9.3",
     "polygons-to-obj": "^0.1.0",
