@@ -107,6 +107,7 @@ var citygmlToObj = function(citygmlPath, objPath) {
         // Output validation error name
         switch (vError[0].message.split(":")[0]) {
           case "GE_S_POLYGON_WRONG_ORIENTATION":
+          case "GE_S_ALL_POLYGONS_WRONG_ORIENTATION":
             console.log("Fix orientation for polygons:", vIndices);
 
             _.each(vIndices, function(vpIndex) {
