@@ -1,6 +1,6 @@
 {
   "name": "citygml-to-obj",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Takes a CityGML file and creates an OBJ file for each building",
   "main": "index.js",
   "scripts": {
@@ -33,7 +33,7 @@
     "citygml-validate-shell": "^0.1.16",
     "fs-extra": "^0.18.4",
     "lodash": "^3.9.3",
-    "polygons-to-obj": "^0.1.0",
+    "polygons-to-obj": "^0.1.1",
     "sax": "^1.1.1",
     "saxpath": "git://github.com/robhawkes/saxpath#attributes-fix",
     "triangulate": "^0.1.1",

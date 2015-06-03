@@ -55,17 +55,7 @@ var citygmlToObj = function(citygmlPath, objPath) {
 
   var saxStream = new saxpath.SaXPath(saxParser, "//bldg:Building");
 
-  // DEBUG: Only output certain number of buildings
-  // var buildingCount = 0;
-  // var maxBuildings = 10;
-
   saxStream.on("match", function(xml) {
-    // Kill stream
-    // if (++buildingCount >= maxBuildings) {
-    //   return;
-    //   // readStream.destroy();
-    // }
-
     var srs = (envelopeSRS) ? envelopeSRS : citygmlSRS(xml);
 
     if (!srs) {
@@ -99,7 +89,11 @@ var citygmlToObj = function(citygmlPath, objPath) {
       });
     }, function(results, callback) {
       // Repair CityGML
+      // TODO: Revalidate and repair after each repair, as geometry will change
       var polygonsCopy = _.clone(allPolygons);
+
+      // Face flipping
+      var flipFaces = [];
 
       _.each(results, function(vError) {
         // Should always be an error, but check anyway
@@ -113,25 +107,38 @@ var citygmlToObj = function(citygmlPath, objPath) {
         // Output validation error name
         switch (vError[0].message.split(":")[0]) {
           case "GE_S_POLYGON_WRONG_ORIENTATION":
-            console.log("Reverse vertices for polygons:", vIndices);
+            console.log("Fix orientation for polygons:", vIndices);
 
             _.each(vIndices, function(vpIndex) {
-              polygonsCopy[vpIndex].reverse();
+              // REMOVED: Now faces are flipped we don't need to reverse the
+              // polygon points
+              // polygonsCopy[vpIndex].reverse();
+
+              // Add face to be flipped (or in our case, not flipped)
+              flipFaces.push(vpIndex);
             });
 
             break;
         }
       });
 
-      callback(null, polygonsCopy);
-    }, function(polygons, callback) {
+      callback(null, polygonsCopy, flipFaces);
+    }, function(polygons, flipFaces, callback) {
       // Triangulate
       var allFaces = [];
 
       // TODO: Support polygons with holes
-      _.each(polygons, function(polygon) {
+      _.each(polygons, function(polygon, pIndex) {
         // Triangulate faces
         var faces = triangulate(polygon);
+
+        // Flip all faces
+        // TODO: Work out why all the valid faces are flipped in the first place
+        if (!_.contains(flipFaces, pIndex)) {
+          _.each(faces, function(face) {
+            face.reverse();
+          });
+        }
 
         allFaces.push(faces);
       });
