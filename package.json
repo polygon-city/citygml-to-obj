@@ -36,7 +36,7 @@
     "polygons-to-obj": "^0.1.1",
     "sax": "^1.1.1",
     "saxpath": "git://github.com/robhawkes/saxpath#attributes-fix",
-    "triangulate": "^0.1.1",
+    "triangulate": "^0.1.2",
     "uuid": "^2.0.1",
     "xmldom": "^0.1.19"
   }

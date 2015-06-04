@@ -148,6 +148,7 @@ var citygmlToObj = function(citygmlPath, objPath) {
     }, function(polygons, faces, callback) {
       // Create OBJ using polygons and faces
       var objStr = polygons2obj(polygons, faces, true);
+      // console.log(objStr);
 
       callback(null, objStr);
     }, function(objStr, callback) {
