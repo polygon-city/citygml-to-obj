@@ -108,7 +108,7 @@ var citygmlToObj = function(citygmlPath, objPath) {
         switch (vError[0].message.split(":")[0]) {
           case "GE_S_POLYGON_WRONG_ORIENTATION":
           case "GE_S_ALL_POLYGONS_WRONG_ORIENTATION":
-            console.log("Fix orientation for polygons:", vIndices);
+            // console.log("Fix orientation for polygons:", vIndices);
 
             _.each(vIndices, function(vpIndex) {
               // REMOVED: Now faces are flipped we don't need to reverse the
