@@ -21,6 +21,8 @@ var triangulate = require("triangulate");
 
 var domParser = new DOMParser();
 
+// TODO: Look into batching and threads to improve reliability and performance
+
 var citygmlToObj = function(citygmlPath, objPath) {
   // SRS
   var envelopeSRS;
@@ -108,14 +110,16 @@ var citygmlToObj = function(citygmlPath, objPath) {
         switch (vError[0].message.split(":")[0]) {
           case "GE_S_POLYGON_WRONG_ORIENTATION":
           case "GE_S_ALL_POLYGONS_WRONG_ORIENTATION":
-            // console.log("Fix orientation for polygons:", vIndices);
-
+            // TODO: Work out why reversing the vertices doesn't flip the
+            // normal so we can fix things that way
             _.each(vIndices, function(vpIndex) {
-              // REMOVED: Now faces are flipped we don't need to reverse the
-              // polygon points
+              var points = polygonsCopy[vpIndex];
+
+              // REMOVED: Until it can be worked out why reversing doesn't
+              // actually flip the normal in this case (it should)
               // polygonsCopy[vpIndex].reverse();
 
-              // Add face to be flipped (or in our case, not flipped)
+              // Add face to be flipped
               flipFaces.push(vpIndex);
             });
 
@@ -131,24 +135,29 @@ var citygmlToObj = function(citygmlPath, objPath) {
       // TODO: Support polygons with holes
       _.each(polygons, function(polygon, pIndex) {
         // Triangulate faces
-        var faces = triangulate(polygon);
+        try {
+          var faces = triangulate(polygon);
 
-        // Flip all faces
-        // TODO: Work out why all the valid faces are flipped in the first place
-        if (!_.contains(flipFaces, pIndex)) {
-          _.each(faces, function(face) {
-            face.reverse();
-          });
+          // Flip incorrect faces
+          if (_.contains(flipFaces, pIndex)) {
+            _.each(faces, function(face) {
+              face.reverse();
+            });
+          }
+
+          allFaces.push(faces);
+        } catch(err) {
+          console.error("Unable to triangulate:", id, err);
+          callback(err, id);
         }
 
-        allFaces.push(faces);
+        callback(null, polygons, allFaces);
       });
-
-      callback(null, polygons, allFaces);
     }, function(polygons, faces, callback) {
       // Create OBJ using polygons and faces
-      var objStr = polygons2obj(polygons, faces, true);
-      // console.log(objStr);
+      // NOTE: Disabled zUP until face normals issues is fixed. The 3DCityDB
+      // Collada output doesn't use zUP either anyway, so this is no worse.
+      var objStr = polygons2obj(polygons, faces, false);
 
       callback(null, objStr);
     }, function(objStr, callback) {
