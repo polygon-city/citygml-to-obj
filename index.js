@@ -21,11 +21,17 @@ var triangulate = require("triangulate");
 
 var domParser = new DOMParser();
 
+var processQueue;
+var saveQueue;
+
 // TODO: Look into batching and threads to improve reliability and performance
 
 var citygmlToObj = function(citygmlPath, objPath) {
   // SRS
   var envelopeSRS;
+
+  processQueue = async.queue(processBuilding, 10);
+  saveQueue = async.queue(saveFile, 5);
 
   var saxParser = sax.createStream(strict, {
     xmlns: true
@@ -58,127 +64,140 @@ var citygmlToObj = function(citygmlPath, objPath) {
   var saxStream = new saxpath.SaXPath(saxParser, "//bldg:Building");
 
   saxStream.on("match", function(xml) {
-    var srs = (envelopeSRS) ? envelopeSRS : citygmlSRS(xml);
-
-    if (!srs) {
-      console.error("Failed to find SRS for building");
-      console.log(xml.toString());
-      return;
-    }
-
-    var xmlDOM = domParser.parseFromString(xml);
-
-    var id = xmlDOM.firstChild.getAttribute("gml:id") || UUID.v4();
-
-    var polygonsGML = citygmlPolygons(xml);
-    var allPolygons = [];
-
-    _.each(polygonsGML, function(polygonGML) {
-      // Get exterior and interior boundaries for polygon (outer and holes)
-      var boundaries = citygmlBoundaries(polygonGML);
-
-      // Get vertex points for the exterior boundary
-      var points = citygmlPoints(boundaries.exterior[0]);
-
-      allPolygons.push(points);
+    processQueue.push({
+      xml: xml,
+      srs: envelopeSRS,
+      objPath: objPath
     });
-
-    // Process control
-    async.waterfall([function(callback) {
-      // Validate CityGML
-      citygmlValidateShell(polygonsGML, function(err, results) {
-        callback(err, results);
-      });
-    }, function(results, callback) {
-      // Repair CityGML
-      // TODO: Revalidate and repair after each repair, as geometry will change
-      var polygonsCopy = _.clone(allPolygons);
-
-      // Face flipping
-      var flipFaces = [];
-
-      _.each(results, function(vError) {
-        // Should always be an error, but check anyway
-        if (!vError || !vError[0]) {
-          return;
-        }
-
-        // Failure indexes, for repair
-        var vIndices = vError[1];
-
-        // Output validation error name
-        switch (vError[0].message.split(":")[0]) {
-          case "GE_S_POLYGON_WRONG_ORIENTATION":
-          case "GE_S_ALL_POLYGONS_WRONG_ORIENTATION":
-            // TODO: Work out why reversing the vertices doesn't flip the
-            // normal so we can fix things that way
-            _.each(vIndices, function(vpIndex) {
-              var points = polygonsCopy[vpIndex];
-
-              // REMOVED: Until it can be worked out why reversing doesn't
-              // actually flip the normal in this case (it should)
-              // polygonsCopy[vpIndex].reverse();
-
-              // Add face to be flipped
-              flipFaces.push(vpIndex);
-            });
-
-            break;
-        }
-      });
-
-      callback(null, polygonsCopy, flipFaces);
-    }, function(polygons, flipFaces, callback) {
-      // Triangulate
-      var allFaces = [];
-
-      // TODO: Support polygons with holes
-      _.each(polygons, function(polygon, pIndex) {
-        // Triangulate faces
-        try {
-          var faces = triangulate(polygon);
-
-          // Flip incorrect faces
-          if (_.contains(flipFaces, pIndex)) {
-            _.each(faces, function(face) {
-              face.reverse();
-            });
-          }
-
-          allFaces.push(faces);
-        } catch(err) {
-          console.error("Unable to triangulate:", id, err);
-          callback(err, id);
-        }
-
-        callback(null, polygons, allFaces);
-      });
-    }, function(polygons, faces, callback) {
-      // Create OBJ using polygons and faces
-      // NOTE: Disabled zUP until face normals issues is fixed. The 3DCityDB
-      // Collada output doesn't use zUP either anyway, so this is no worse.
-      var objStr = polygons2obj(polygons, faces, false);
-
-      callback(null, objStr);
-    }, function(objStr, callback) {
-      // Save OBJ file
-      var outputPath = path.join(objPath, id + ".obj");
-
-      // TODO: Fix huge delay before these small files appear in the filesystem when using fsextra.outputFile
-      // - Possibly a local issue with my filesystem rather than a Node or app issue
-      // - Perhaps batching will help, as well as deferring saving until CityGML buffer processing is complete
-      fs.outputFile(outputPath, objStr, function(err) {
-        if (err) {
-          console.error(err);
-        }
-      });
-    }]);
   });
 
   saxStream.on("end", function() {});
 
   var readStream = fs.createReadStream(citygmlPath);
   readStream.pipe(saxParser);
+};
+
+var processBuilding = function(data, pCallback) {
+  var srs = (data.srs) ? data.srs : citygmlSRS(data.xml);
+
+  if (!srs) {
+    console.error("Failed to find SRS for building");
+    console.log(data.xml.toString());
+    return;
+  }
+
+  var xmlDOM = domParser.parseFromString(data.xml);
+
+  var id = xmlDOM.firstChild.getAttribute("gml:id") || UUID.v4();
+
+  var polygonsGML = citygmlPolygons(data.xml);
+  var allPolygons = [];
+
+  _.each(polygonsGML, function(polygonGML) {
+    // Get exterior and interior boundaries for polygon (outer and holes)
+    var boundaries = citygmlBoundaries(polygonGML);
+
+    // Get vertex points for the exterior boundary
+    var points = citygmlPoints(boundaries.exterior[0]);
+
+    allPolygons.push(points);
+  });
+
+  // Process control
+  async.waterfall([function(callback) {
+    // Validate CityGML
+    citygmlValidateShell(polygonsGML, function(err, results) {
+      callback(err, results);
+    });
+  }, function(results, callback) {
+    // Repair CityGML
+    // TODO: Revalidate and repair after each repair, as geometry will change
+    var polygonsCopy = _.clone(allPolygons);
+
+    // Face flipping
+    var flipFaces = [];
+
+    _.each(results, function(vError) {
+      // Should always be an error, but check anyway
+      if (!vError || !vError[0]) {
+        return;
+      }
+
+      // Failure indexes, for repair
+      var vIndices = vError[1];
+
+      // Output validation error name
+      switch (vError[0].message.split(":")[0]) {
+        case "GE_S_POLYGON_WRONG_ORIENTATION":
+        case "GE_S_ALL_POLYGONS_WRONG_ORIENTATION":
+          // TODO: Work out why reversing the vertices doesn't flip the
+          // normal so we can fix things that way
+          _.each(vIndices, function(vpIndex) {
+            var points = polygonsCopy[vpIndex];
+
+            // REMOVED: Until it can be worked out why reversing doesn't
+            // actually flip the normal in this case (it should)
+            // polygonsCopy[vpIndex].reverse();
+
+            // Add face to be flipped
+            flipFaces.push(vpIndex);
+          });
+
+          break;
+      }
+    });
+
+    callback(null, polygonsCopy, flipFaces);
+  }, function(polygons, flipFaces, callback) {
+    // Triangulate
+    var allFaces = [];
+
+    // TODO: Support polygons with holes
+    _.each(polygons, function(polygon, pIndex) {
+      // Triangulate faces
+      try {
+        var faces = triangulate(polygon);
+
+        // Flip incorrect faces
+        if (_.contains(flipFaces, pIndex)) {
+          _.each(faces, function(face) {
+            face.reverse();
+          });
+        }
+
+        allFaces.push(faces);
+      } catch(err) {
+        console.error("Unable to triangulate:", id, err);
+        callback(err, id);
+      }
+    });
+
+    callback(null, polygons, allFaces);
+  }, function(polygons, faces, callback) {
+    // Create OBJ using polygons and faces
+    // NOTE: Disabled zUP until face normals issues is fixed. The 3DCityDB
+    // Collada output doesn't use zUP either anyway, so this is no worse.
+    var objStr = polygons2obj(polygons, faces, false);
+
+    callback(null, objStr);
+  }, function(objStr, callback) {
+    // Save OBJ file
+    var outputPath = path.join(data.objPath, id + ".obj");
+
+    saveQueue.push({
+      path: outputPath,
+      data: objStr
+    }, function(err) {
+      console.log("Saved:", outputPath);
+      pCallback(null);
+    });
+  }]);
+};
+
+var saveFile = function(output, callback) {
+  fs.outputFile(output.path, output.data, function(err) {
+    callback(err);
+  });
 };
 
 module.exports = citygmlToObj;
