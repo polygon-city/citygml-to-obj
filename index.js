@@ -192,7 +192,9 @@ var processBuilding = function(data, pCallback) {
       pCallback(null);
     });
   }], function(err) {
-    console.error("Unable to convert building:", id);
+    if (err) {
+      console.error("Unable to convert building:", id);
+    }
   });
 };
 
