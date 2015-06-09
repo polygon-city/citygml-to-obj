@@ -191,7 +191,9 @@ var processBuilding = function(data, pCallback) {
       console.log("Saved:", outputPath);
       pCallback(null);
     });
-  }]);
+  }], function(err) {
+    console.error("Unable to convert building:", id);
+  });
 };
 
 var saveFile = function(output, callback) {
