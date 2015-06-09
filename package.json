@@ -30,7 +30,7 @@
     "citygml-points": "^0.1.1",
     "citygml-polygons": "^0.1.1",
     "citygml-srs": "^0.1.1",
-    "citygml-validate-shell": "^0.1.19",
+    "citygml-validate-shell": "^0.1.20",
     "fs-extra": "^0.18.4",
     "lodash": "^3.9.3",
     "polygons-to-obj": "^0.1.2",
