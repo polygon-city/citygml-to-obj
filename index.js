@@ -127,6 +127,7 @@ var processBuilding = function(data, pCallback) {
       var vIndices = vError[1];
 
       // Output validation error name
+      // TODO: Halt conversion on particularly bad validation errors
       switch (vError[0].message.split(":")[0]) {
         case "GE_S_POLYGON_WRONG_ORIENTATION":
         case "GE_S_ALL_POLYGONS_WRONG_ORIENTATION":
@@ -178,6 +179,16 @@ var processBuilding = function(data, pCallback) {
     // NOTE: Disabled zUP until face normals issues is fixed. The 3DCityDB
     // Collada output doesn't use zUP either anyway, so this is no worse.
     var objStr = polygons2obj(polygons, faces, false);
+
+    // Coordinates of origin (0,0,0) of the OBJ
+    var originPoint = polygons[0][0];
+
+    // Add origin and SRS to the OBJ header
+    var originStr = "# Origin: (" + originPoint[0] + ", " + originPoint[1] + ", " + originPoint[2] + ")\n";
+
+    var srsStr = "# SRS: " + srs.name + "\n";
+
+    objStr = originStr + srsStr + objStr;
 
     callback(null, objStr);
   }, function(objStr, callback) {
