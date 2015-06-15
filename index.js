@@ -1,37 +1,79 @@
 var _ = require("lodash");
-var async = require("async");
+var childProcess = require("child_process");
 var fs = require("fs-extra");
-var path = require("path");
 var sax = require("sax");
 var saxpath = require("saxpath");
-var DOMParser = require("xmldom").DOMParser;
 var strict = true;
-var UUID = require("uuid");
+
+var numCPUs = require("os").cpus().length;
+
+var shutdown = false;
 
 // CityGML helpers
 var citygmlSRS = require("citygml-srs");
-var citygmlPolygons = require("citygml-polygons");
-var citygmlBoundaries = require("citygml-boundaries");
-var citygmlPoints = require("citygml-points");
-var citygmlValidateShell = require("citygml-validate-shell");
 
-// Other helpers
-var polygons2obj = require("polygons-to-obj");
-var triangulate = require("triangulate");
-
-var domParser = new DOMParser();
-
-var processQueue;
-var saveQueue;
+var workers = {};
+var processQueue = [];
 
 // TODO: Look into batching and threads to improve reliability and performance
 
-var citygmlToObj = function(citygmlPath, objPath) {
+// Create a new worker for each CPU
+for (var i = 0; i < numCPUs; i++) {
+  var worker = childProcess.fork(__dirname + "/worker");
+
+  workers[worker.pid] = {
+    process: worker,
+    ready: true,
+    alive: true
+  };
+
+  // Be notified when worker processes die.
+  worker.on("exit", function() {
+    workers[this.pid].alive = false;
+  });
+
+  // Receive messages from this worker and handle them in the master process.
+  worker.on("message", function(msg) {
+    if (msg.finished) {
+      if (shutdown) {
+        this.kill("SIGINT");
+      }
+
+      workers[this.pid].ready = true;
+    }
+  });
+}
+
+var processingQueue = false;
+
+var updateQueue = function() {
+  if (processingQueue) {
+    return;
+  }
+
+  processingQueue = true;
+  processWorkers();
+  processingQueue = false;
+};
+
+var processWorkers = function() {
+  _.each(workers, function(worker, pid) {
+    if (processQueue.length === 0) {
+      return false;
+    }
+
+    if (worker.ready) {
+      worker.ready = false;
+
+      var item = processQueue.shift();
+      worker.process.send(item);
+    }
+  });
+};
+
+var citygmlToObj = function(citygmlPath, objPath, callback) {
   // SRS
   var envelopeSRS;
-
-  processQueue = async.queue(processBuilding, 10);
-  saveQueue = async.queue(saveFile, 5);
 
   var saxParser = sax.createStream(strict, {
     xmlns: true
@@ -71,148 +113,32 @@ var citygmlToObj = function(citygmlPath, objPath) {
     });
   });
 
-  saxStream.on("end", function() {});
+  saxStream.on("end", function() {
+    shutdown = true;
+
+    // Stop update check
+    clearInterval(queueCheck);
+
+    // Update queue one last time
+    updateQueue();
+
+    // Clean up unused workers
+    // Keep the currently active worker open until it's finished
+    _.each(workers, function(worker) {
+      if (worker.ready) {
+        worker.process.kill("SIGINT");
+      }
+    });
+
+    if (callback) {
+      callback();
+    }
+  });
 
   var readStream = fs.createReadStream(citygmlPath);
   readStream.pipe(saxParser);
 };
 
-var processBuilding = function(data, pCallback) {
-  var srs = (data.srs) ? data.srs : citygmlSRS(data.xml);
-
-  if (!srs) {
-    console.error("Failed to find SRS for building");
-    console.log(data.xml.toString());
-    return;
-  }
-
-  var xmlDOM = domParser.parseFromString(data.xml);
-
-  var id = xmlDOM.firstChild.getAttribute("gml:id") || UUID.v4();
-
-  var polygonsGML = citygmlPolygons(data.xml);
-  var allPolygons = [];
-
-  _.each(polygonsGML, function(polygonGML) {
-    // Get exterior and interior boundaries for polygon (outer and holes)
-    var boundaries = citygmlBoundaries(polygonGML);
-
-    // Get vertex points for the exterior boundary
-    var points = citygmlPoints(boundaries.exterior[0]);
-
-    allPolygons.push(points);
-  });
-
-  // Process control
-  async.waterfall([function(callback) {
-    // Validate CityGML
-    citygmlValidateShell(polygonsGML, function(err, results) {
-      callback(err, results);
-    });
-  }, function(results, callback) {
-    // Repair CityGML
-    // TODO: Revalidate and repair after each repair, as geometry will change
-    var polygonsCopy = _.clone(allPolygons);
-
-    // Face flipping
-    var flipFaces = [];
-
-    _.each(results, function(vError) {
-      // Should always be an error, but check anyway
-      if (!vError || !vError[0]) {
-        return;
-      }
-
-      // Failure indexes, for repair
-      var vIndices = vError[1];
-
-      // Output validation error name
-      // TODO: Halt conversion on particularly bad validation errors
-      switch (vError[0].message.split(":")[0]) {
-        case "GE_S_POLYGON_WRONG_ORIENTATION":
-        case "GE_S_ALL_POLYGONS_WRONG_ORIENTATION":
-          // TODO: Work out why reversing the vertices doesn't flip the
-          // normal so we can fix things that way
-          _.each(vIndices, function(vpIndex) {
-            var points = polygonsCopy[vpIndex];
-
-            // REMOVED: Until it can be worked out why reversing doesn't
-            // actually flip the normal in this case (it should)
-            // polygonsCopy[vpIndex].reverse();
-
-            // Add face to be flipped
-            flipFaces.push(vpIndex);
-          });
-
-          break;
-      }
-    });
-
-    callback(null, polygonsCopy, flipFaces);
-  }, function(polygons, flipFaces, callback) {
-    // Triangulate
-    var allFaces = [];
-
-    // TODO: Support polygons with holes
-    _.each(polygons, function(polygon, pIndex) {
-      // Triangulate faces
-      try {
-        var faces = triangulate(polygon);
-
-        // Flip incorrect faces
-        if (_.contains(flipFaces, pIndex)) {
-          _.each(faces, function(face) {
-            face.reverse();
-          });
-        }
-
-        allFaces.push(faces);
-      } catch(err) {
-        console.error("Unable to triangulate:", id, err);
-        callback(err, id);
-      }
-    });
-
-    callback(null, polygons, allFaces);
-  }, function(polygons, faces, callback) {
-    // Create OBJ using polygons and faces
-    // NOTE: Disabled zUP until face normals issues is fixed. The 3DCityDB
-    // Collada output doesn't use zUP either anyway, so this is no worse.
-    var objStr = polygons2obj(polygons, faces, false);
-
-    // Coordinates of origin (0,0,0) of the OBJ
-    var originPoint = polygons[0][0];
-
-    // Add origin and SRS to the OBJ header
-    var originStr = "# Origin: (" + originPoint[0] + ", " + originPoint[1] + ", " + originPoint[2] + ")\n";
-
-    var srsStr = "# SRS: " + srs.name + "\n";
-
-    objStr = originStr + srsStr + objStr;
-
-    callback(null, objStr);
-  }, function(objStr, callback) {
-    // Save OBJ file
-    var outputPath = path.join(data.objPath, id + ".obj");
-
-    saveQueue.push({
-      path: outputPath,
-      data: objStr
-    }, function(err) {
-      console.log("Saved:", outputPath);
-      pCallback(null);
-    });
-  }], function(err) {
-    if (err) {
-      console.error("Unable to convert building:", id);
-    }
-  });
-};
-
-var saveFile = function(output, callback) {
-  fs.outputFile(output.path, output.data, function(err) {
-    callback(err);
-  });
-};
+var queueCheck = setInterval(updateQueue, 50);
 
 module.exports = citygmlToObj;
