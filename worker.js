@@ -120,6 +120,43 @@ var processBuilding = function(data, pCallback) {
       try {
         var faces = triangulate(polygon);
 
+        // REMOVED: Superfluous to needs right now as collinear checks are
+        // performed in the validation step.
+        //
+        // // Compare face normals with polygon
+        // var f1 = faces[0];
+        //
+        // var fp0 = $V(polygon[f1[0]]);
+        // var fp1 = $V(polygon[f1[1]]);
+        // var fp2 = $V(polygon[f1[2]]);
+        //
+        // var fNormal = normalUnit(fp0, fp1, fp2);
+        //
+        // var p0, p1, p2;
+        // var pNormal;
+        // var collinearThreshold = 0.01;
+        //
+        // // Find first sequence of points that aren't collinear
+        // _.each(polygon, function(point, pIndex) {
+        //   // Exit if no more points are available
+        //   if (pIndex === polygon.length - 2) {
+        //     return false;
+        //   }
+        //
+        //   p0 = $V(point);
+        //   p1 = $V(polygon[pIndex+1]);
+        //   p2 = $V(polygon[pIndex+2]);
+        //
+        //   // Colinear or near-colinear?
+        //   var cross = p0.subtract(p1).cross(p0.subtract(p2));
+        //
+        //   // Exit if non-collinear points are found
+        //   if (Math.abs(cross.e(1)) > collinearThreshold || Math.abs(cross.e(2)) > collinearThreshold || Math.abs(cross.e(3)) > collinearThreshold) {
+        //     pNormal = normalUnit(p0, p1, p2);
+        //     return false;
+        //   }
+        // });
+
         // Flip incorrect faces
         if (_.contains(flipFaces, pIndex)) {
           _.each(faces, function(face) {
@@ -169,6 +206,17 @@ var processBuilding = function(data, pCallback) {
     }
   });
 };
+
+// var normalUnit = function(p1, p2, p3) {
+//   var v1 = $V(p1);
+//   var v2 = $V(p2);
+//   var v3 = $V(p3);
+//
+//   var a = v2.subtract(v1);
+//   var b = v3.subtract(v1);
+//
+//   return a.cross(b).toUnitVector();
+// };
 
 var saveFile = function(output, callback) {
   fs.outputFile(output.path, output.data, function(err) {
