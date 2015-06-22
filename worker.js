@@ -174,9 +174,7 @@ var processBuilding = function(data, pCallback) {
     callback(null, polygons, allFaces);
   }, function(polygons, faces, callback) {
     // Create OBJ using polygons and faces
-    // NOTE: Disabled zUP until face normals issues is fixed. The 3DCityDB
-    // Collada output doesn't use zUP either anyway, so this is no worse.
-    var objStr = polygons2obj(polygons, faces, false);
+    var objStr = polygons2obj(polygons, faces, true);
 
     // Coordinates of origin (0,0,0) of the OBJ
     var originPoint = polygons[0][0];
