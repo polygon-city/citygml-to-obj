@@ -34,7 +34,7 @@
     "fs-extra": "^0.18.4",
     "lodash": "^3.9.3",
     "microtime": "^1.4.2",
-    "polygons-to-obj": "^0.1.3",
+    "polygons-to-obj": "^0.1.4",
     "sax": "^1.1.1",
     "saxpath": "git://github.com/robhawkes/saxpath#attributes-fix",
     "triangulate": "^0.1.5",
