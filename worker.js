@@ -176,15 +176,10 @@ var processBuilding = function(data, pCallback) {
     // Create OBJ using polygons and faces
     var objStr = polygons2obj(polygons, faces, true);
 
-    // Coordinates of origin (0,0,0) of the OBJ
-    var originPoint = polygons[0][0];
-
-    // Add origin and SRS to the OBJ header
-    var originStr = "# Origin: (" + originPoint[0] + ", " + originPoint[1] + ", " + originPoint[2] + ")\n";
-
-    var srsStr = "# SRS: " + srs.name + "\n";
-
-    objStr = originStr + srsStr + objStr;
+    // Add SRS to the OBJ header
+    // var srsStr = "# SRS: " + srs.name + "\n";
+    //
+    // objStr = srsStr + objStr;
 
     callback(null, objStr);
   }, function(objStr, callback) {
