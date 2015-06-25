@@ -14,9 +14,8 @@ citygml2obj("/path/to/some.gml", "/path/for/obj/output/", function() {
 ## Example output
 
 ```
-# Origin: (393408.81326613, 35.3899993896484, 5820431.70758075)
-# SRS: EPSG:25833
 # Generated using the polygons-to-obj package
+# Origin: (393408.81326613, 35.3899993896484, 5820431.70758075)
 
 v 0 0 0
 v 0.0007680089911445975 35.8840621565621 -0.0011349096894264221
