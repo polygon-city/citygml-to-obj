@@ -120,6 +120,8 @@ var processBuilding = function(data, pCallback) {
       try {
         var faces = triangulate(polygon);
 
+        // TODO: De-dupe vertices without breaking face indexes
+
         // REMOVED: Superfluous to needs right now as collinear checks are
         // performed in the validation step.
         //
