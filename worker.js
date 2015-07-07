@@ -5,9 +5,10 @@ var path = require("path");
 var UUID = require("uuid");
 var microtime = require("microtime");
 var DOMParser = require("xmldom").DOMParser;
+var proj4 = require("proj4");
+var request = require("request");
 
 // CityGML helpers
-var citygmlSRS = require("citygml-srs");
 var citygmlPolygons = require("citygml-polygons");
 var citygmlBoundaries = require("citygml-boundaries");
 var citygmlPoints = require("citygml-points");
@@ -39,11 +40,18 @@ process.on("message", function(msg) {
 });
 
 var processBuilding = function(data, pCallback) {
-  var srs = (data.srs) ? data.srs : citygmlSRS(data.xml);
+  var proj4def = data.proj4def;
+  var bingKey = data.bingKey;
 
-  if (!srs) {
-    console.error("Failed to find SRS for building");
-    console.log(data.xml.toString());
+  var zUP = true;
+
+  if (!proj4def) {
+    callback(new Error("Failed to find proj4 definition for building"));
+    return;
+  }
+
+  if (!bingKey) {
+    callback(new Error("Bing API key is required"));
     return;
   }
 
@@ -120,8 +128,6 @@ var processBuilding = function(data, pCallback) {
       try {
         var faces = triangulate(polygon);
 
-        // TODO: De-dupe vertices without breaking face indexes
-
         // REMOVED: Superfluous to needs right now as collinear checks are
         // performed in the validation step.
         //
@@ -175,8 +181,91 @@ var processBuilding = function(data, pCallback) {
 
     callback(null, polygons, allFaces);
   }, function(polygons, faces, callback) {
+    // Find origin point
+
+    // Vertical can be either Y (1) or Z (2)
+    var verticalIndex = (zUP) ? 2 : 1;
+
+    // Horizontal can be either X (0) or Y (1)
+    var horizontalIndex = (zUP) ? 0 : 1;
+
+    var origin;
+    var vertMin;
+
+    _.each(polygons, function(polygon) {
+      // Find minimum on vertical axis
+      _.each(polygon, function(point) {
+        if (!vertMin) {
+          vertMin = point[verticalIndex];
+          return;
+        }
+
+        if (point[verticalIndex] < vertMin) {
+          vertMin = point[verticalIndex];
+          return;
+        }
+      });
+    });
+
+    // Collect points that share minimum vertical values
+    var vertMinPoints = [];
+    _.each(polygons, function(polygon) {
+      _.each(polygon, function(point) {
+        vertMinPoints = _.unique(vertMinPoints.concat(_.filter(polygon, function(point) {
+          return (point[verticalIndex] === vertMin);
+        })));
+      });
+    });
+
+    // Find point with minimum on alternate horizontal axis
+    _.each(vertMinPoints, function(point) {
+      if (!origin) {
+        origin = _.clone(point);
+        return;
+      }
+
+      if (point[horizontalIndex] < origin[horizontalIndex]) {
+        origin = _.clone(point);
+        return;
+      }
+    });
+
+    callback(null, polygons, faces, origin);
+  }, function(polygons, faces, origin, callback) {
+    var projection = proj4.defs("EPSG:ORIGIN", proj4def);
+
+    // Convert coordinates from SRS to WGS84 [lon, lat]
+    var coords = proj4("EPSG:ORIGIN").inverse([origin[0], origin[1]]);
+
+    var url = "http://dev.virtualearth.net/REST/v1/Elevation/List?points=" + coords[1] + "," + coords[0] + "&heights=sealevel&key=" + bingKey;
+
+    // Retreive elevation via Bing API
+    request(url, function(err, res, body) {
+      if (err) {
+        callback(new Error("Unable to retrieve elevation data"));
+        return;
+      }
+
+      var bodyJSON = JSON.parse(body);
+
+      if (!bodyJSON.resourceSets[0].resources || bodyJSON.resourceSets[0].resources.length === 0) {
+        callback(new Error("Unexpected elevation API response"));
+        return;
+      }
+
+      if (!bodyJSON.resourceSets[0].resources[0].elevations || bodyJSON.resourceSets[0].resources[0].elevations.length === 0) {
+        callback(new Error("Elevation values not present in API response"));
+        return;
+      }
+
+      var elevations = bodyJSON.resourceSets[0].resources[0].elevations;
+      var zoomLevel = bodyJSON.resourceSets[0].resources[0].zoomLevel;
+
+      callback(null, polygons, faces, origin, elevations[0]);
+    });
+  }, function(polygons, faces, origin, elevation, callback) {
     // Create OBJ using polygons and faces
-    var objStr = polygons2obj(polygons, faces, true);
+    var objStr = polygons2obj(polygons, faces, origin, elevation, true);
 
     // Add SRS to the OBJ header
     // var srsStr = "# SRS: " + srs.name + "\n";
@@ -198,6 +287,7 @@ var processBuilding = function(data, pCallback) {
   }], function(err) {
     if (err) {
       console.error("Unable to convert building:", id);
+      pCallback(err);
     }
   });
 };

@@ -71,9 +71,16 @@ var processWorkers = function() {
   });
 };
 
-var citygmlToObj = function(citygmlPath, objPath, callback) {
-  // SRS
-  var envelopeSRS;
+var citygmlToObj = function(citygmlPath, objPath, proj4def, bingKey, callback) {
+  if (!proj4def) {
+    callback(new Error("Failed to find proj4 definition for building: ", citygmlPath));
+    return;
+  }
+
+  if (!bingKey) {
+    callback(new Error("Bing API key is required"));
+    return;
+  }
 
   var saxParser = sax.createStream(strict, {
     xmlns: true
@@ -90,25 +97,28 @@ var citygmlToObj = function(citygmlPath, objPath, callback) {
 
   saxParser.on("error", streamErrorHandler);
 
-  var saxStreamEnvelope = new saxpath.SaXPath(saxParser, "//gml:Envelope");
-
-  saxStreamEnvelope.on("match", function(xml) {
-    var srs = citygmlSRS(xml);
-
-    if (srs) {
-      envelopeSRS = srs;
-    }
-
-    // No need to kill the stream as it's still used to find buildings
-    // readStream.destroy();
-  });
+  // REMOVED: SRS logic replaced with user-defined proj4 definition
+  //
+  // var saxStreamEnvelope = new saxpath.SaXPath(saxParser, "//gml:Envelope");
+  //
+  // saxStreamEnvelope.on("match", function(xml) {
+  //   var srs = citygmlSRS(xml);
+  //
+  //   if (srs) {
+  //     envelopeSRS = srs;
+  //   }
+  //
+  //   // No need to kill the stream as it's still used to find buildings
+  //   // readStream.destroy();
+  // });
 
   var saxStream = new saxpath.SaXPath(saxParser, "//bldg:Building");
 
   saxStream.on("match", function(xml) {
     processQueue.push({
       xml: xml,
-      srs: envelopeSRS,
+      proj4def: proj4def,
+      bingKey: bingKey,
       objPath: objPath
     });
   });
