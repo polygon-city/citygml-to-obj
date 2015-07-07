@@ -6,7 +6,14 @@ Takes a CityGML file and creates an OBJ file for each building
 
 ```javascript
 var citygml2obj = require("citygml-to-obj");
-citygml2obj("/path/to/some.gml", "/path/for/obj/output/", function() {
+
+// Used to project CityGML coords to WGS84
+var proj4def = "+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
+
+// Used to find ground-height under each building
+var bingKey = "your-bing-key";
+
+citygml2obj("/path/to/some.gml", "/path/for/obj/output/", proj4def, bingKey, function() {
   console.log("Finished converting CityGML file");
 });
 ```
