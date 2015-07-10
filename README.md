@@ -8,6 +8,7 @@ Takes a CityGML file and creates an OBJ file for each building
 var citygml2obj = require("citygml-to-obj");
 
 // Used to project CityGML coords to WGS84
+// This projection is an example for the Berlin CityGML dataset
 var proj4def = "+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
 
 // Used to find ground-height under each building
