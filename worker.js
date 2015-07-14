@@ -54,9 +54,14 @@ var processBuilding = function(data, pCallback) {
 
   // Skip building if it already exists and overwriting is disabled
   // TODO: Probably a good idea to make this async
-  if (!overwrite && fs.openSync(outputPath, "r")) {
-    pCallback(new Error("Building has already been converted: " + outputPath));
-    return;
+  if (!overwrite) {
+    try {
+      fs.openSync(outputPath, "r");
+      pCallback(new Error("Building has already been converted: " + outputPath));
+      return;
+    } catch(err) {
+      // Error means file wasn't found, which is good
+    }
   }
 
   var polygonsGML = citygmlPolygons(data.xml);
