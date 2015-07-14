@@ -7,15 +7,30 @@ Takes a CityGML file and creates an OBJ file for each building
 ```javascript
 var citygml2obj = require("citygml-to-obj");
 
-// Used to project CityGML coords to WGS84
-// This projection is an example for the Berlin CityGML dataset
-var proj4def = "+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs";
+var options = {
+  // Path to CityGML input file
+  citygmlPath: "/path/to/some.gml",
 
-// Used to find ground-height under each building
-var bingKey = "your-bing-key";
+  // Path to OBJ output directory
+  objPath: "/path/for/obj/output/",
 
-citygml2obj("/path/to/some.gml", "/path/for/obj/output/", proj4def, bingKey, function() {
-  console.log("Finished converting CityGML file");
+  // Used to project CityGML coords to WGS84
+  // This projection is an example for the Berlin CityGML dataset
+  proj4def: "+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
+
+  // Used to find ground-height under each building
+  bingKey: "your-bing-key",
+
+  // Overwrite existing OBJ files if they already exist
+  overwrite: false
+};
+
+citygml2obj(options, function(err) {
+  if (err) {
+    console.error(err);
+  }
+
+  console.log("Finished converting CityGML");
 });
 ```
 

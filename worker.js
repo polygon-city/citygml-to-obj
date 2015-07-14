@@ -28,11 +28,12 @@ process.on("message", function(msg) {
 
   var start = microtime.now();
 
-  processBuilding(msg, function() {
+  processBuilding(msg, function(err) {
     var end = microtime.now();
 
     process.send({
       finished: true,
+      err: (err) ? err.message : undefined,
       pid: process.pid,
       time: ((end - start) / 1000)
     });
@@ -42,22 +43,21 @@ process.on("message", function(msg) {
 var processBuilding = function(data, pCallback) {
   var proj4def = data.proj4def;
   var bingKey = data.bingKey;
+  var overwrite = (data.overwrite === true) ? true : false;
 
   var zUP = true;
-
-  if (!proj4def) {
-    callback(new Error("Failed to find proj4 definition for building"));
-    return;
-  }
-
-  if (!bingKey) {
-    callback(new Error("Bing API key is required"));
-    return;
-  }
 
   var xmlDOM = domParser.parseFromString(data.xml);
 
   var id = xmlDOM.firstChild.getAttribute("gml:id") || UUID.v4();
+  var outputPath = path.join(data.objPath, id + ".obj");
+
+  // Skip building if it already exists and overwriting is disabled
+  // TODO: Probably a good idea to make this async
+  if (!overwrite && fs.openSync(outputPath, "r")) {
+    pCallback(new Error("Building has already been converted: " + outputPath));
+    return;
+  }
 
   var polygonsGML = citygmlPolygons(data.xml);
   var allPolygons = [];
@@ -275,8 +275,6 @@ var processBuilding = function(data, pCallback) {
     callback(null, objStr);
   }, function(objStr, callback) {
     // Save OBJ file
-    var outputPath = path.join(data.objPath, id + ".obj");
-
     saveFile({
       path: outputPath,
       data: objStr

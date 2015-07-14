@@ -14,35 +14,42 @@ var citygmlSRS = require("citygml-srs");
 
 var workers = {};
 var processQueue = [];
+var queueCheck;
 
 // TODO: Look into batching and threads to improve reliability and performance
 
-// Create a new worker for each CPU
-for (var i = 0; i < numCPUs; i++) {
-  var worker = childProcess.fork(__dirname + "/worker");
+var createWorkers = function() {
+  // Create a new worker for each CPU
+  for (var i = 0; i < numCPUs; i++) {
+    var worker = childProcess.fork(__dirname + "/worker");
 
-  workers[worker.pid] = {
-    process: worker,
-    ready: true,
-    alive: true
-  };
+    workers[worker.pid] = {
+      process: worker,
+      ready: true,
+      alive: true
+    };
 
-  // Be notified when worker processes die.
-  worker.on("exit", function() {
-    workers[this.pid].alive = false;
-  });
+    // Be notified when worker processes die.
+    worker.on("exit", function() {
+      workers[this.pid].alive = false;
+    });
 
-  // Receive messages from this worker and handle them in the master process.
-  worker.on("message", function(msg) {
-    if (msg.finished) {
-      if (shutdown) {
-        this.kill("SIGINT");
+    // Receive messages from this worker and handle them in the master process.
+    worker.on("message", function(msg) {
+      if (msg.finished) {
+        if (msg.err) {
+          console.error(msg.err);
+        }
+
+        if (shutdown) {
+          this.kill("SIGINT");
+        }
+
+        workers[this.pid].ready = true;
       }
-
-      workers[this.pid].ready = true;
-    }
-  });
-}
+    });
+  }
+};
 
 var processingQueue = false;
 
@@ -71,15 +78,42 @@ var processWorkers = function() {
   });
 };
 
-var citygmlToObj = function(citygmlPath, objPath, proj4def, bingKey, callback) {
-  if (!proj4def) {
-    callback(new Error("Failed to find proj4 definition for building: ", citygmlPath));
+var citygmlToObj = function(options, callback) {
+  if (!options) {
+    options = {};
+  }
+
+  var defaults = {
+    overwrite: false
+  };
+
+  // Set defaults
+  _.defaults(options, defaults);
+
+  if (!options.citygmlPath) {
+    callback(new Error("CityGML path is required"));
     return;
   }
 
-  if (!bingKey) {
+  if (!options.objPath) {
+    callback(new Error("OBJ path is required: ", citygmlPath));
+    return;
+  }
+
+  if (!options.proj4def) {
+    callback(new Error("Proj4 definition is required: ", citygmlPath));
+    return;
+  }
+
+  if (!options.bingKey) {
     callback(new Error("Bing API key is required"));
     return;
+  }
+
+  // Set up workers
+  if (_.isEmpty(workers)) {
+    createWorkers();
+    queueCheck = setInterval(updateQueue, 50);
   }
 
   var saxParser = sax.createStream(strict, {
@@ -117,9 +151,10 @@ var citygmlToObj = function(citygmlPath, objPath, proj4def, bingKey, callback) {
   saxStream.on("match", function(xml) {
     processQueue.push({
       xml: xml,
-      proj4def: proj4def,
-      bingKey: bingKey,
-      objPath: objPath
+      proj4def: options.proj4def,
+      bingKey: options.bingKey,
+      objPath: options.objPath,
+      overwrite: options.overwrite
     });
   });
 
@@ -145,10 +180,8 @@ var citygmlToObj = function(citygmlPath, objPath, proj4def, bingKey, callback) {
     }
   });
 
-  var readStream = fs.createReadStream(citygmlPath);
+  var readStream = fs.createReadStream(options.citygmlPath);
   readStream.pipe(saxParser);
 };
-
-var queueCheck = setInterval(updateQueue, 50);
 
 module.exports = citygmlToObj;

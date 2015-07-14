@@ -1,6 +1,6 @@
 {
   "name": "citygml-to-obj",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Takes a CityGML file and creates an OBJ file for each building",
   "main": "index.js",
   "scripts": {
