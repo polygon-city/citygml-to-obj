@@ -18,9 +18,6 @@ var options = {
   // This projection is an example for the Berlin CityGML dataset
   proj4def: "+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
 
-  // Used to find ground-height under each building
-  bingKey: "your-bing-key",
-
   // Overwrite existing OBJ files if they already exist
   overwrite: false
 };
