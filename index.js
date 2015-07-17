@@ -105,11 +105,6 @@ var citygmlToObj = function(options, callback) {
     return;
   }
 
-  if (!options.bingKey) {
-    callback(new Error("Bing API key is required"));
-    return;
-  }
-
   // Set up workers
   if (_.isEmpty(workers)) {
     createWorkers();
@@ -152,7 +147,6 @@ var citygmlToObj = function(options, callback) {
     processQueue.push({
       xml: xml,
       proj4def: options.proj4def,
-      bingKey: options.bingKey,
       objPath: options.objPath,
       overwrite: options.overwrite
     });

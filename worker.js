@@ -42,7 +42,6 @@ process.on("message", function(msg) {
 
 var processBuilding = function(data, pCallback) {
   var proj4def = data.proj4def;
-  var bingKey = data.bingKey;
   var overwrite = (data.overwrite === true) ? true : false;
 
   var zUP = true;
@@ -242,31 +241,27 @@ var processBuilding = function(data, pCallback) {
     // Convert coordinates from SRS to WGS84 [lon, lat]
     var coords = proj4("EPSG:ORIGIN").inverse([origin[0], origin[1]]);
 
-    var url = "http://dev.virtualearth.net/REST/v1/Elevation/List?points=" + coords[1] + "," + coords[0] + "&heights=sealevel&key=" + bingKey;
+    var url = "http://maps.google.com/maps/api/elevation/json?sensor=false&locations=" + coords[1] + "," + coords[0];
 
-    // Retreive elevation via Bing API
+    // Retreive elevation via API
+    // TODO: Implement rate limit to avoid errors (max 10 reqests per second)
+    // See: https://github.com/3dcitydb/importer-exporter/blob/9a35ab9ae47f036f04d498893c204fd63087b6c6/src/org/citydb/modules/kml/database/ElevationServiceHandler.java#L134
     request(url, function(err, res, body) {
       if (err) {
-        callback(new Error("Unable to retrieve elevation data"));
+        callback(new Error("Unable to retrieve elevation data" + ((err.message) ? ": " + err.message : "")));
         return;
       }
 
       var bodyJSON = JSON.parse(body);
 
-      if (!bodyJSON.resourceSets[0].resources || bodyJSON.resourceSets[0].resources.length === 0) {
-        callback(new Error("Unexpected elevation API response"));
-        return;
-      }
-
-      if (!bodyJSON.resourceSets[0].resources[0].elevations || bodyJSON.resourceSets[0].resources[0].elevations.length === 0) {
+      if (!bodyJSON.results || bodyJSON.results.length === 0) {
         callback(new Error("Elevation values not present in API response"));
         return;
       }
 
-      var elevations = bodyJSON.resourceSets[0].resources[0].elevations;
-      var zoomLevel = bodyJSON.resourceSets[0].resources[0].zoomLevel;
+      var elevation = bodyJSON.results[0].elevation;
 
-      callback(null, polygons, faces, origin, elevations[0]);
+      callback(null, polygons, faces, origin, elevation);
     });
   }, function(polygons, faces, origin, elevation, callback) {
     // Create OBJ using polygons and faces
