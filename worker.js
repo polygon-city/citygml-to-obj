@@ -55,7 +55,8 @@ var processBuilding = function(data, pCallback) {
   // TODO: Probably a good idea to make this async
   if (!overwrite) {
     try {
-      fs.openSync(outputPath, "r");
+      var fd = fs.openSync(outputPath, "r");
+      fs.closeSync(fd);
       pCallback(new Error("Building has already been converted: " + outputPath));
       return;
     } catch(err) {
