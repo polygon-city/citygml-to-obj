@@ -12,8 +12,11 @@ var shutdown = false;
 // CityGML helpers
 var citygmlSRS = require("citygml-srs");
 
+var readStream;
+
 var workers = {};
 var processQueue = [];
+var maxQueue = 30;
 var queueCheck;
 
 // TODO: Look into batching and threads to improve reliability and performance
@@ -74,6 +77,12 @@ var processWorkers = function() {
 
       var item = processQueue.shift();
       worker.process.send(item);
+
+      // Resume queue when space is available
+      if (processQueue.length < maxQueue && readStream.isPaused()) {
+        console.log("Resuming queue");
+        readStream.resume();
+      }
     }
   });
 };
@@ -150,6 +159,12 @@ var citygmlToObj = function(options, callback) {
       objPath: options.objPath,
       overwrite: options.overwrite
     });
+
+    // Pause stream if queue is too large
+    if (processQueue.length >= maxQueue && !readStream.isPaused()) {
+      console.log("Pausing queue");
+      readStream.pause();
+    }
   });
 
   saxStream.on("end", function() {
@@ -174,7 +189,7 @@ var citygmlToObj = function(options, callback) {
     }
   });
 
-  var readStream = fs.createReadStream(options.citygmlPath);
+  readStream = fs.createReadStream(options.citygmlPath);
   readStream.pipe(saxParser);
 };
 
