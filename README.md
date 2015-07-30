@@ -4,6 +4,12 @@ Takes a CityGML file and creates an OBJ file for each building
 
 ## Usage
 
+bash:
+```bash
+npm install citygml-to-obj
+```
+
+javascript:
 ```javascript
 var citygml2obj = require("citygml-to-obj");
 
