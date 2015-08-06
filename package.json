@@ -1,6 +1,6 @@
 {
   "name": "citygml-to-obj",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "description": "Takes a CityGML file and creates an OBJ file for each building",
   "main": "index.js",
   "scripts": {
@@ -41,6 +41,7 @@
     "saxpath": "git://github.com/robhawkes/saxpath#attributes-fix",
     "triangulate": "^0.1.5",
     "uuid": "^2.0.1",
-    "xmldom": "^0.1.19"
+    "xmldom": "^0.1.19",
+    "xmldom-to-xml": "^0.1.1"
   }
 }

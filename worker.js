@@ -5,6 +5,7 @@ var path = require("path");
 var UUID = require("uuid");
 var microtime = require("microtime");
 var DOMParser = require("xmldom").DOMParser;
+var xmldom2xml = require("xmldom-to-xml");
 var proj4 = require("proj4");
 var request = require("request");
 
@@ -186,7 +187,29 @@ var processBuilding = function(data, pCallback) {
 
     callback(null, polygons, allFaces);
   }, function(polygons, faces, callback) {
-    // Find origin point
+    // Origin point
+    var origin;
+
+    // Find highest ground surface for elevation origin
+    var groundSurfaces = xmldom2xml(xmlDOM.getElementsByTagName("bldg:GroundSurface"));
+
+    if (groundSurfaces && groundSurfaces.length > 0) {
+      var maxGroundElevation;
+      var maxGroundIndex;
+
+      _.each(groundSurfaces, function(groundSurface, gsIndex) {
+        var gsPoints = citygmlPoints(groundSurface);
+
+        _.each(gsPoints, function(gsPoint) {
+          if (!maxGroundElevation || gsPoint[2] > maxGroundElevation) {
+            maxGroundElevation = gsPoint[2];
+            maxGroundIndex = gsIndex;
+
+            return false;
+          }
+        });
+      });
+    }
 
     // Vertical can be either Y (1) or Z (2)
     var verticalIndex = (zUP) ? 2 : 1;
@@ -194,7 +217,6 @@ var processBuilding = function(data, pCallback) {
     // Horizontal can be either X (0) or Y (1)
     var horizontalIndex = (zUP) ? 0 : 1;
 
-    var origin;
     var vertMin;
 
     _.each(polygons, function(polygon) {
@@ -235,14 +257,20 @@ var processBuilding = function(data, pCallback) {
       }
     });
 
-    callback(null, polygons, faces, origin);
-  }, function(polygons, faces, origin, callback) {
+    callback(null, polygons, faces, origin, maxGroundElevation);
+  }, function(polygons, faces, origin, groundElevation, callback) {
+    // Skip external elevation API if ground elevation is provided
+    if (groundElevation) {
+      callback(null, polygons, faces, origin, groundElevation);
+      return;
+    }
+
     var projection = proj4.defs("EPSG:ORIGIN", proj4def);
 
     // Convert coordinates from SRS to WGS84 [lon, lat]
     var coords = proj4("EPSG:ORIGIN").inverse([origin[0], origin[1]]);
 
-    var url = "http://maps.google.com/maps/api/elevation/json?sensor=false&locations=" + coords[1] + "," + coords[0];
+    var url = "http://valhalla-elevation-dev-1428989121.us-east-1.elb.amazonaws.com/elevation?json={%22shape%22:[{%22lat%22:" + coords[1] + ",%22lon%22:" + coords[0] + "}]}";
 
     // Retreive elevation via API
     // TODO: Implement rate limit to avoid errors (max 10 reqests per second)
@@ -255,12 +283,12 @@ var processBuilding = function(data, pCallback) {
 
       var bodyJSON = JSON.parse(body);
 
-      if (!bodyJSON.results || bodyJSON.results.length === 0) {
+      if (!bodyJSON.elevation || bodyJSON.elevation.length === 0) {
         callback(new Error("Elevation values not present in API response"));
         return;
       }
 
-      var elevation = bodyJSON.results[0].elevation;
+      var elevation = bodyJSON.elevation[0];
 
       callback(null, polygons, faces, origin, elevation);
     });
