@@ -186,34 +186,46 @@ var citygmlToObj = function(options, callback) {
 
   saxStream.on("end", function() {
     console.log("Shutting down");
+    console.log("Queue count:", processQueue.length);
 
-    shutdown = true;
-
-    // Stop update check
-    clearInterval(queueCheck);
-
-    // Update queue one last time
-    updateQueue();
-
-    // Clean up unused workers
-    // Keep the currently active worker open until it's finished
-    _.each(workers, function(worker) {
-      if (worker.ready) {
-        worker.process.kill("SIGINT");
+    // Wait for queue to empty
+    var queueWaitTimer = setInterval(function() {
+      if (processQueue.length > 0) {
+        return;
       }
-    });
 
-    console.log("Waiting for workers");
+      // Stop queue wait timer
+      clearInterval(queueWaitTimer);
 
-    // Wait for all workers to finish before callback
-    // TODO: Don't let this go on forever
-    var aliveTimer = setInterval(function() {
-      var areShutdown = areWorkersShutdown();
+      shutdown = true;
 
-      if (areShutdown) {
-        clearInterval(aliveTimer);
-        callback(null);
-      }
+      // Stop update check
+      clearInterval(queueCheck);
+
+      // Update queue one last time
+      // updateQueue();
+
+      // Clean up unused workers
+      // Keep the currently active worker open until it's finished
+      _.each(workers, function(worker) {
+        if (worker.ready) {
+          worker.process.kill("SIGINT");
+        }
+      });
+
+      console.log("Waiting for workers");
+
+      // Wait for all workers to finish before callback
+      // TODO: Don't let this go on forever
+      var aliveTimer = setInterval(function() {
+        var areShutdown = areWorkersShutdown();
+
+        if (areShutdown) {
+          console.log("Queue count:", processQueue.length);
+          clearInterval(aliveTimer);
+          callback(null);
+        }
+      }, 500);
     }, 500);
   });
 

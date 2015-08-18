@@ -29,11 +29,12 @@ process.on("message", function(msg) {
 
   var start = microtime.now();
 
-  processBuilding(msg, function(err) {
+  processBuilding(msg, function(err, wroteFile) {
     var end = microtime.now();
 
     process.send({
       finished: true,
+      wroteFile: wroteFile,
       err: (err) ? err.message : undefined,
       pid: process.pid,
       time: ((end - start) / 1000)
@@ -309,12 +310,12 @@ var processBuilding = function(data, pCallback) {
       data: objStr
     }, function(err) {
       console.log("Saved:", outputPath);
-      pCallback(null);
+      pCallback(null, true);
     });
   }], function(err) {
     if (err) {
       console.error("Unable to convert building:", id);
-      pCallback(err);
+      pCallback(err, false);
     }
   });
 };
