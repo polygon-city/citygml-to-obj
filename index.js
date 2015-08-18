@@ -54,6 +54,23 @@ var createWorkers = function() {
   }
 };
 
+var areWorkersShutdown = function() {
+  var alive = false;
+
+  _.each(workers, function(worker) {
+    if (worker.alive) {
+      alive = true;
+      return false;
+    }
+  });
+
+  if (alive) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 var processingQueue = false;
 
 var updateQueue = function() {
@@ -168,6 +185,8 @@ var citygmlToObj = function(options, callback) {
   });
 
   saxStream.on("end", function() {
+    console.log("Shutting down");
+
     shutdown = true;
 
     // Stop update check
@@ -184,9 +203,18 @@ var citygmlToObj = function(options, callback) {
       }
     });
 
-    if (callback) {
-      callback();
-    }
+    console.log("Waiting for workers");
+
+    // Wait for all workers to finish before callback
+    // TODO: Don't let this go on forever
+    var aliveTimer = setInterval(function() {
+      var areShutdown = areWorkersShutdown();
+
+      if (areShutdown) {
+        clearInterval(aliveTimer);
+        callback(null);
+      }
+    }, 500);
   });
 
   readStream = fs.createReadStream(options.citygmlPath);
