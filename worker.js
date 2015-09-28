@@ -45,6 +45,7 @@ process.on("message", function(msg) {
 var processBuilding = function(data, pCallback) {
   var proj4def = data.proj4def;
   var overwrite = (data.overwrite === true) ? true : false;
+  var valhallaKey = data.valhallaKey;
 
   var zUP = true;
 
@@ -266,12 +267,17 @@ var processBuilding = function(data, pCallback) {
       return;
     }
 
+    if (!valhallaKey) {
+      callback(new Error("No Valhalla key was provided to retrieve elevation"));
+      return;
+    }
+
     var projection = proj4.defs("EPSG:ORIGIN", proj4def);
 
     // Convert coordinates from SRS to WGS84 [lon, lat]
     var coords = proj4("EPSG:ORIGIN").inverse([origin[0], origin[1]]);
 
-    var url = "http://valhalla-elevation-dev-1428989121.us-east-1.elb.amazonaws.com/elevation?json={%22shape%22:[{%22lat%22:" + coords[1] + ",%22lon%22:" + coords[0] + "}]}";
+    var url = "https://elevation.mapzen.com/height?json={%22shape%22:[{%22lat%22:" + coords[1] + ",%22lon%22:" + coords[0] + "}]}&api_key=" + valhallaKey;
 
     // Retreive elevation via API
     // TODO: Implement rate limit to avoid errors (max 10 reqests per second)
@@ -282,16 +288,27 @@ var processBuilding = function(data, pCallback) {
         return;
       }
 
-      var bodyJSON = JSON.parse(body);
-
-      if (!bodyJSON.elevation || bodyJSON.elevation.length === 0) {
-        callback(new Error("Elevation values not present in API response"));
+      if (res.statusCode != 200) {
+        callback(new Error("Unexpected elevation data response, HTTP: " + res.statusCode));
         return;
       }
 
-      var elevation = bodyJSON.elevation[0];
+      try {
+        var bodyJSON = JSON.parse(body);
 
-      callback(null, polygons, faces, origin, elevation);
+        if (!bodyJSON.height || bodyJSON.height.length === 0) {
+          callback(new Error("Elevation values not present in API response"));
+          return;
+        }
+
+        var elevation = bodyJSON.height[0];
+
+        callback(null, polygons, faces, origin, elevation);
+        return;
+      } catch(err) {
+        callback(new Error("Unexpected elevation data response" + ((err.message) ? ": " + err.message : "")));
+        return;
+      }
     });
   }, function(polygons, faces, origin, elevation, callback) {
     // Create OBJ using polygons and faces

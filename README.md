@@ -25,7 +25,10 @@ var options = {
   proj4def: "+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs",
 
   // Overwrite existing OBJ files if they already exist
-  overwrite: false
+  overwrite: false,
+
+  // API key for the Mapzen Valhalla elevation endpoint
+  valhallaKey: "your_api_key"
 };
 
 citygml2obj(options, function(err) {

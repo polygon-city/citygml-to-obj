@@ -174,7 +174,8 @@ var citygmlToObj = function(options, callback) {
       xml: xml,
       proj4def: options.proj4def,
       objPath: options.objPath,
-      overwrite: options.overwrite
+      overwrite: options.overwrite,
+      valhallaKey: options.valhallaKey
     });
 
     // Pause stream if queue is too large
